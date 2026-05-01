@@ -1,19 +1,33 @@
-// Policy evaluator. Deny by default. Three shapes only for the slice.
+// Policy evaluator. Deny by default. Three shapes: public/authenticated/roles/rule.
 
 import type { Auth, Policy } from "./types.ts";
+import { compile } from "./expr.ts";
 
 export type Decision =
   | { effect: "allow" }
   | { effect: "deny"; reason: string }
-  | { effect: "filter"; column: "authorId"; value: string };
+  | { effect: "rule"; predicate: (row: Record<string, unknown>) => boolean };
+
+const ruleCache = new Map<string, (scope: Record<string, unknown>) => unknown>();
+
+function compileCached(rule: string) {
+  let fn = ruleCache.get(rule);
+  if (!fn) {
+    fn = compile(rule);
+    ruleCache.set(rule, fn);
+  }
+  return fn;
+}
 
 /**
  * Evaluate a policy for a given auth context.
  *
- * - `public`                              → allow
- * - `authenticated`                       → allow iff auth != null
- * - `{ roles: [...] }`                    → allow iff auth.role ∈ roles
- * - `{ rule: "row.authorId == auth.userId" }` → filter (read) or row-check (update/delete)
+ * - `public`                 → allow
+ * - `authenticated`          → allow iff auth != null
+ * - `{ roles: [...] }`       → allow iff auth.role ∈ roles
+ * - `{ rule: "<expr>" }`     → returns predicate; LIST queries can't push down
+ *                              (yet) so we filter post-fetch; GET/PATCH/DELETE
+ *                              evaluate against the fetched row.
  *
  * Unknown role / missing claims → deny. Never default-allow.
  */
@@ -33,21 +47,30 @@ export function evaluate(policy: Policy, auth: Auth | null): Decision {
   }
 
   if ("rule" in policy) {
-    if (!auth) return { effect: "deny", reason: "unauthenticated" };
-    // The only supported rule in the slice. Easy to extend with jsep later.
-    if (policy.rule === "row.authorId == auth.userId") {
-      return { effect: "filter", column: "authorId", value: auth.userId };
+    let fn: (scope: Record<string, unknown>) => unknown;
+    try {
+      fn = compileCached(policy.rule);
+    } catch (e) {
+      return { effect: "deny", reason: `rule parse error: ${(e as Error).message}` };
     }
-    return { effect: "deny", reason: `unsupported rule: ${policy.rule}` };
+    return {
+      effect: "rule",
+      predicate: (row) => {
+        try {
+          return Boolean(fn({ row, auth: auth ?? {} }));
+        } catch {
+          return false;
+        }
+      },
+    };
   }
 
   return { effect: "deny", reason: "unknown policy shape" };
 }
 
-/** Apply a row-check decision to a fetched row. Used by update/delete. */
+/** Apply a row-check decision to a fetched row. Used by GET/PATCH/DELETE. */
 export function rowAllowed(decision: Decision, row: Record<string, unknown>): boolean {
   if (decision.effect === "allow") return true;
   if (decision.effect === "deny") return false;
-  // filter → row must match
-  return row[decision.column] === decision.value;
+  return decision.predicate(row);
 }

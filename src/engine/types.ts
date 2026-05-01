@@ -10,7 +10,7 @@ export type Policy =
   | "public"
   | "authenticated"
   | { roles: readonly string[] }
-  | { rule: "row.authorId == auth.userId" }; // limited rule set for the slice
+  | { rule: string }; // arbitrary expression — see engine/expr.ts
 
 /** Subset of Policy valid for custom routes — no row rules (no row context). */
 export type RoutePolicy =

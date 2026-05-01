@@ -33,12 +33,12 @@ function mountEntity(
     const decision = evaluate(entity.policies.read, auth);
     if (decision.effect === "deny") return c.json({ error: decision.reason }, 403);
 
-    let q = db.selectFrom(name).selectAll();
-    if (decision.effect === "filter") {
-      q = q.where(decision.column as never, "=", decision.value as never);
-    }
-    const rows = await q.execute();
-    return c.json(rows);
+    const rows = await db.selectFrom(name).selectAll().execute();
+    // Rule decisions filter post-fetch for now. Acceptable for the slice;
+    // future work: compile common rule shapes to SQL where-clauses.
+    const filtered =
+      decision.effect === "rule" ? rows.filter((r) => decision.predicate(r)) : rows;
+    return c.json(filtered);
   });
 
   // GET

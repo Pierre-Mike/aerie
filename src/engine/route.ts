@@ -22,9 +22,9 @@ export function mountRoutes(app: App, routes: readonly RouteDefAny[]): void {
         if (decision.effect === "deny") {
           return c.json({ error: decision.reason }, 403);
         }
-        // RoutePolicy can't produce a `filter` decision, so this is unreachable
-        // by construction — but guard anyway in case the type narrows weaken.
-        if (decision.effect === "filter") {
+        // RoutePolicy excludes `rule` by construction — this guards against
+        // future type narrowing weakening.
+        if (decision.effect === "rule") {
           return c.json({ error: "row rules not allowed on custom routes" }, 500);
         }
       }
