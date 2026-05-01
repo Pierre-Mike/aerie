@@ -4,11 +4,21 @@ One config file → typed CRUD + auth, on Cloudflare Workers (or anywhere).
 
 ```ts
 // src/config.ts — your whole backend
+import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { fieldsFrom } from "aerie/drizzle";
+
+export const posts = sqliteTable("posts", {
+  id:       text("id").primaryKey(),
+  title:    text("title").notNull(),
+  body:     text("body").notNull(),
+  authorId: text("authorId").notNull(),
+});
+
 export default {
   jwt: { secret: env.JWT_SECRET, userIdClaim: "sub", roleClaim: "role" },
   entities: {
     posts: {
-      fields: { title: "string", body: "string", authorId: "string" },
+      fields: fieldsFrom(posts),
       policies: {
         create: { roles: ["user", "admin"] },
         read:   "public",
@@ -20,7 +30,7 @@ export default {
 } satisfies Cfg;
 ```
 
-That's it. CRUD routes, role checks, row-level filters, and end-to-end TS types are all derived from this file.
+That's it. Drizzle owns columns + migrations. Aerie owns auth, policies, CRUD routes, row-level filters, and end-to-end TS types — all derived from this file.
 
 ## Why
 
