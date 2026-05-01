@@ -2,7 +2,7 @@
 // is composed into the app via `cfg.routes`. Same Policy DSL as entities.
 
 import type { Hono } from "hono";
-import type { RouteDef, RouteDefAny, Vars } from "./types.ts";
+import type { PlatformLite, RouteDef, RouteDefAny, Vars } from "./types.ts";
 import { evaluate } from "./policy.ts";
 
 type App = Hono<{ Variables: Vars }>;
@@ -12,7 +12,11 @@ export function defineRoute<B = undefined>(def: RouteDef<B>): RouteDef<B> {
   return def;
 }
 
-export function mountRoutes(app: App, routes: readonly RouteDefAny[]): void {
+export function mountRoutes(
+  app: App,
+  routes: readonly RouteDefAny[],
+  platform: PlatformLite,
+): void {
   for (const route of routes) {
     const method = route.method.toLowerCase() as "get" | "post" | "patch" | "delete";
 
@@ -45,6 +49,8 @@ export function mountRoutes(app: App, routes: readonly RouteDefAny[]): void {
         body,
         params: c.req.param() as Record<string, string>,
         query: new URL(c.req.url).searchParams,
+        req: c.req.raw,
+        platform,
       });
 
       if (result instanceof Response) return result;

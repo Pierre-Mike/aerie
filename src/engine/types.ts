@@ -1,6 +1,6 @@
 // Config schema and derived types. The single source of truth for an aerie app.
 
-export type FieldType = "string" | "int" | "bool" | "datetime";
+export type FieldType = "string" | "int" | "bool" | "datetime" | "file";
 
 export type FieldDef =
   | FieldType
@@ -83,6 +83,19 @@ export type RouteCtx<B> = {
   body: B;
   params: Record<string, string>;
   query: URLSearchParams;
+  req: Request;
+  platform: PlatformLite;
+};
+
+/** Lightweight Platform reference for handlers — kept at type level only here. */
+export type PlatformLite = {
+  db: unknown;
+  storage?: {
+    put: (key: string, body: Uint8Array | ArrayBuffer, contentType?: string) => Promise<void>;
+    get: (key: string) => Promise<Uint8Array | null>;
+    delete: (key: string) => Promise<void>;
+    signedUrl?: (key: string, ttlSeconds?: number) => Promise<string | null>;
+  };
 };
 
 export type RouteDef<B = undefined> = {

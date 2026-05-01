@@ -3,6 +3,7 @@
 import type { Cfg, DbOf } from "./engine/types.ts";
 import { health } from "./routes/health.ts";
 import { echo } from "./routes/echo.ts";
+import { upload } from "./routes/upload.ts";
 
 export function buildConfig(secret: string): Cfg {
   return {
@@ -40,7 +41,7 @@ export function buildConfig(secret: string): Cfg {
         },
       },
     },
-    routes: [health, echo],
+    routes: [health, echo, upload],
   };
 }
 

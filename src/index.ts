@@ -7,12 +7,13 @@ import { buildConfig, type DB } from "./config.ts";
 export interface Env {
   DB: D1Database;
   JWT_SECRET: string;
+  FILES?: R2Bucket;
 }
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const cfg = buildConfig(env.JWT_SECRET);
-    const platform = cloudflarePlatform<DB>(env.DB);
+    const platform = cloudflarePlatform<DB>(env.DB, env.FILES);
     const app = buildApp(cfg, platform);
     return app.fetch(req);
   },

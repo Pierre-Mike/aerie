@@ -13,7 +13,12 @@ export function buildApp<DB>(cfg: Cfg, platform: Platform<DB>): App {
   const app = new Hono<{ Variables: Vars }>();
   app.use("*", authMiddleware(cfg));
   mountCrud(app, cfg, platform.db);
-  if (cfg.routes) mountRoutes(app, cfg.routes);
+  if (cfg.routes) {
+    mountRoutes(app, cfg.routes, {
+      db: platform.db,
+      storage: platform.storage,
+    });
+  }
   app.get("/", (c) =>
     c.json({
       name: "aerie",
