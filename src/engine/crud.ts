@@ -2,16 +2,17 @@
 
 import type { Hono } from "hono";
 import type { Kysely } from "kysely";
-import type { Cfg, EntityDef, Vars } from "./types.ts";
+import type { Cfg, EntityDef, HookCtx, Vars } from "./types.ts";
 import { evaluate, rowAllowed } from "./policy.ts";
 
 type App = Hono<{ Variables: Vars }>;
+type DynDb = Kysely<Record<string, Record<string, unknown>>>;
 
 export function mountCrud<DB>(app: App, cfg: Cfg, db: Kysely<DB>): void {
   // The CRUD engine treats every table as a Record<string, unknown>; field
   // validation handles shape. The end-user keeps strict types via Kysely
   // when they query the same instance directly.
-  const dyn = db as unknown as Kysely<Record<string, Record<string, unknown>>>;
+  const dyn = db as unknown as DynDb;
   for (const [name, entity] of Object.entries(cfg.entities)) {
     mountEntity(app, name, entity, dyn);
   }
@@ -21,9 +22,10 @@ function mountEntity(
   app: App,
   name: string,
   entity: EntityDef,
-  db: Kysely<Record<string, Record<string, unknown>>>,
+  db: DynDb,
 ): void {
   const base = `/api/${name}`;
+  const hookCtx = (auth: HookCtx["auth"]): HookCtx => ({ auth, platform: { db } });
 
   // LIST
   app.get(base, async (c) => {
@@ -66,8 +68,14 @@ function mountEntity(
     if (!validated.ok) return c.json({ error: validated.error }, 400);
 
     const id = crypto.randomUUID();
-    const row = { id, ...validated.value };
+    let row: Record<string, unknown> = { id, ...validated.value };
+    if (entity.hooks?.beforeCreate) {
+      row = await entity.hooks.beforeCreate(row, hookCtx(auth));
+    }
     await db.insertInto(name).values(row as never).execute();
+    if (entity.hooks?.afterCreate) {
+      await entity.hooks.afterCreate(row, hookCtx(auth));
+    }
     return c.json(row, 201);
   });
 
@@ -87,10 +95,13 @@ function mountEntity(
     if (!rowAllowed(decision, existing)) return c.json({ error: "forbidden" }, 403);
 
     const patch = (await c.req.json()) as Record<string, unknown>;
-    const filteredPatch: Record<string, unknown> = {};
+    let filteredPatch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(patch)) {
       if (k === "id") continue;
       if (k in entity.fields) filteredPatch[k] = v;
+    }
+    if (entity.hooks?.beforeUpdate) {
+      filteredPatch = await entity.hooks.beforeUpdate(filteredPatch, existing, hookCtx(auth));
     }
     if (Object.keys(filteredPatch).length === 0) {
       return c.json(existing);
@@ -105,6 +116,9 @@ function mountEntity(
       .selectAll()
       .where("id" as never, "=", id as never)
       .executeTakeFirst();
+    if (entity.hooks?.afterUpdate && updated) {
+      await entity.hooks.afterUpdate(updated, existing, hookCtx(auth));
+    }
     return c.json(updated);
   });
 
@@ -123,7 +137,13 @@ function mountEntity(
     if (!existing) return c.json({ error: "not found" }, 404);
     if (!rowAllowed(decision, existing)) return c.json({ error: "forbidden" }, 403);
 
+    if (entity.hooks?.beforeDelete) {
+      await entity.hooks.beforeDelete(existing, hookCtx(auth));
+    }
     await db.deleteFrom(name).where("id" as never, "=", id as never).execute();
+    if (entity.hooks?.afterDelete) {
+      await entity.hooks.afterDelete(existing, hookCtx(auth));
+    }
     return c.body(null, 204);
   });
 }

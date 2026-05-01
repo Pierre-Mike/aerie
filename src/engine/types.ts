@@ -26,6 +26,31 @@ export type EntityDef = {
     update: Policy;
     delete: Policy;
   };
+  hooks?: Hooks;
+};
+
+export type HookCtx = {
+  auth: Auth | null;
+  platform: { db: unknown };
+};
+
+export type Hooks = {
+  beforeCreate?: (row: Record<string, unknown>, ctx: HookCtx) =>
+    | Record<string, unknown>
+    | Promise<Record<string, unknown>>;
+  afterCreate?: (row: Record<string, unknown>, ctx: HookCtx) => void | Promise<void>;
+  beforeUpdate?: (
+    patch: Record<string, unknown>,
+    prev: Record<string, unknown>,
+    ctx: HookCtx,
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>;
+  afterUpdate?: (
+    row: Record<string, unknown>,
+    prev: Record<string, unknown>,
+    ctx: HookCtx,
+  ) => void | Promise<void>;
+  beforeDelete?: (row: Record<string, unknown>, ctx: HookCtx) => void | Promise<void>;
+  afterDelete?: (row: Record<string, unknown>, ctx: HookCtx) => void | Promise<void>;
 };
 
 export type Cfg = {
