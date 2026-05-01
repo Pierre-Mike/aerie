@@ -84,6 +84,40 @@ await c.posts.update(post.id, { title: "edited" });
 
 Types derive from your config. No codegen, no separate schema.
 
+## Schema & migrations (optional: Drizzle)
+
+For real migrations, point Drizzle at your config and let aerie infer fields from the same tables:
+
+```ts
+// config.ts — schema + policies in one file
+import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { fieldsFrom } from "aerie/drizzle";
+
+export const posts = sqliteTable("posts", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  authorId: text("authorId").notNull().references(() => users.id),
+});
+
+export const cfg = {
+  entities: {
+    posts: {
+      fields: fieldsFrom(posts),                    // ← derived, not duplicated
+      policies: { /* ... */ },
+      relations: { /* ... */ },
+    },
+  },
+};
+```
+
+```bash
+bunx drizzle-kit generate    # emits SQL migration
+bunx drizzle-kit push        # applies to D1 / SQLite / Postgres
+```
+
+Drizzle owns columns + migrations. Aerie owns auth, policies, CRUD, hooks, relations, the typed client. Same approach works against any Drizzle-supported DB. End-to-end runnable example in [`samples/posts/`](./samples/posts/).
+
 ## Status
 
 39/39 tests green. Working today:
@@ -96,8 +130,9 @@ Types derive from your config. No codegen, no separate schema.
 - Storage — Platform.storage (R2 on CF, FS / memory on Node) + sample upload route
 - Typed client — `createClient<DB>()` derives shapes from the config
 - D1 adapter (Workers) + better-sqlite3 adapter (tests / local Node)
+- Drizzle bridge — `fieldsFrom(table)` derives aerie fields from a Drizzle schema; migrations via `drizzle-kit`
 
-Not production-ready. Known gaps: computed fields (function-based read-only columns), real migration tooling beyond hand-rolled SQL, OpenAPI export, multi-tenant patterns, soft-delete sugar.
+Not production-ready. Known gaps: computed fields (function-based read-only columns), OpenAPI export, multi-tenant patterns, soft-delete sugar, Postgres/MySQL platform adapters (Kysely supports them — just need wiring).
 
 ## License
 
