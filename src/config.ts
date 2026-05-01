@@ -1,6 +1,8 @@
 // The single source of truth. Edit this file to change the backend.
 
 import type { Cfg, DbOf } from "./engine/types.ts";
+import { health } from "./routes/health.ts";
+import { echo } from "./routes/echo.ts";
 
 export function buildConfig(secret: string): Cfg {
   return {
@@ -20,6 +22,7 @@ export function buildConfig(secret: string): Cfg {
         },
       },
     },
+    routes: [health, echo],
   };
 }
 

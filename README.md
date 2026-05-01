@@ -44,18 +44,28 @@ bun run dev                 # wrangler dev → http://localhost:8787
 
 ## Custom routes
 
-CRUD goes in `config.ts`. Anything else is a plain Hono route on the same app:
+CRUD lives in `config.ts`. Anything else is one function per file, registered in the same config:
 
 ```ts
 // src/routes/checkout.ts
-export const checkout = (app: App) =>
-  app.post("/checkout", async (c) => {
-    const auth = c.get("auth"); // same JWT middleware
+import { defineRoute } from "../engine/route.ts";
+export const checkout = defineRoute({
+  method: "POST",
+  path: "/checkout",
+  auth: { roles: ["user", "admin"] },   // same Policy DSL as entities
+  body: CheckoutBody,                    // any { parse(unknown) => T } — Zod, Valibot, hand-rolled
+  handler: ({ auth, body }) => {
     /* ... */
-  });
+    return { url };
+  },
+});
+
+// src/config.ts
+import { checkout } from "./routes/checkout.ts";
+export const cfg = { entities: { /* ... */ }, routes: [checkout] };
 ```
 
-Same `Platform` ctx, same types, same JWT.
+One file, one route, fully typed. JWT verified by the same middleware. The config still lists every endpoint in the app.
 
 ## Status
 

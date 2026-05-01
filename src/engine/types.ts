@@ -12,6 +12,12 @@ export type Policy =
   | { roles: readonly string[] }
   | { rule: "row.authorId == auth.userId" }; // limited rule set for the slice
 
+/** Subset of Policy valid for custom routes — no row rules (no row context). */
+export type RoutePolicy =
+  | "public"
+  | "authenticated"
+  | { roles: readonly string[] };
+
 export type EntityDef = {
   fields: Record<string, FieldDef>;
   policies: {
@@ -27,7 +33,32 @@ export type Cfg = {
     | { secret: string; userIdClaim?: string; roleClaim?: string; algorithm?: "HS256" | "HS384" | "HS512" }
     | { jwksUrl: string; userIdClaim?: string; roleClaim?: string };
   entities: Record<string, EntityDef>;
+  routes?: readonly RouteDefAny[];
 };
+
+// ── Custom routes ─────────────────────────────────────────────────────────────
+export type Method = "GET" | "POST" | "PATCH" | "DELETE";
+
+/** Anything with a `.parse(unknown) => T` works — Zod, Valibot, hand-rolled. */
+export type Validator<T> = { parse: (input: unknown) => T };
+
+export type RouteCtx<B> = {
+  auth: Auth | null;
+  body: B;
+  params: Record<string, string>;
+  query: URLSearchParams;
+};
+
+export type RouteDef<B = undefined> = {
+  method: Method;
+  path: string;
+  auth?: RoutePolicy;
+  body?: Validator<B>;
+  handler: (ctx: RouteCtx<B>) => Promise<unknown> | unknown;
+};
+
+/** Erased form for storage in the routes array. */
+export type RouteDefAny = RouteDef<any>;
 
 // ── Type-level field → TS type mapping ────────────────────────────────────────
 type ResolveType<T> = T extends FieldType
