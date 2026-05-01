@@ -14,6 +14,7 @@
     "migrate:remote": "wrangler d1 migrations apply aerie --remote"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.6.0",
     "jose": "^5.9.0",
     "jsep": "^1.4.0",
@@ -24,6 +25,7 @@
     "@cloudflare/workers-types": "^4.20240821.0",
     "@types/better-sqlite3": "^7.6.11",
     "better-sqlite3": "^11.3.0",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5",
     "wrangler": "^3.72.0"
