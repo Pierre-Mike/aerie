@@ -31,7 +31,7 @@ That's it. CRUD routes, role checks, row-level filters, and end-to-end TS types 
 - **External auth** — bring any IdP that issues a JWT (Clerk, Auth0, WorkOS, Better-Auth, Supabase). Aerie verifies and reads claims; never owns identity.
 - **Cloudflare-first, not Cloudflare-only** — D1 + R2 + KV out of the box; `Platform` adapter swaps to Postgres/S3/Redis on Node, AWS, Bun.
 - **Local-first** — `wrangler dev` gives you the full stack against local D1. Tests run via Vitest with in-memory SQLite.
-- **Tiny** — ~400 LOC of engine. Read it in an afternoon. Own it.
+- **Tiny** — ~600 LOC of engine + sample. Read it in an afternoon. Own it.
 
 ## Quick start
 
@@ -69,7 +69,14 @@ One file, one route, fully typed. JWT verified by the same middleware. The confi
 
 ## Status
 
-Validating slice. Posts entity, role + row-level policies, JWT verify, integration tests green. Not production-ready.
+Validating slice — 16/16 tests green. Working today:
+
+- Entities with fields, policies (`public` / `authenticated` / `{ roles }` / row rules), validation
+- Custom routes via `defineRoute` (one file per handler), composed in `cfg.routes`
+- JWT verify (HS256 shared secret or remote JWKS)
+- D1 adapter (Workers) + better-sqlite3 adapter (tests / Node)
+
+Not production-ready. Missing: relations, hooks, computed fields, file storage, RPC client export, full expression evaluator (jsep). Add as needed.
 
 ## License
 
