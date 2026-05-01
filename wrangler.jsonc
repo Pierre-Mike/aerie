@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aerie",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aerie",
+      "database_id": "local",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "JWT_SECRET": "dev-only-replace-in-prod"
+  }
+}
