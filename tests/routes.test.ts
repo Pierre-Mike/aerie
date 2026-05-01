@@ -1,34 +1,7 @@
 // Custom routes (defineRoute / mountRoutes) — auth gating, body validation, public access.
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { SignJWT } from "jose";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { buildApp } from "../src/engine/build.ts";
-import { nodeSqlitePlatform } from "../src/adapters/node-sqlite.ts";
-import { buildConfig, type DB } from "../src/config.ts";
-
-const SECRET = "test-secret-32-bytes-minimum-padding-xx";
-const KEY = new TextEncoder().encode(SECRET);
-
-async function token(payload: Record<string, unknown>): Promise<string> {
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(KEY);
-}
-
-function bearer(t: string): HeadersInit {
-  return { Authorization: `Bearer ${t}`, "Content-Type": "application/json" };
-}
-
-function setup() {
-  const { platform, raw } = nodeSqlitePlatform<DB>();
-  const sql = readFileSync(join(__dirname, "../migrations/0001_init.sql"), "utf8");
-  raw.exec(sql);
-  return buildApp(buildConfig(SECRET), platform);
-}
+import { setup, token, bearer } from "./helpers.ts";
 
 describe("custom routes", () => {
   let app: ReturnType<typeof setup>;

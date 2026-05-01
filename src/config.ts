@@ -8,6 +8,21 @@ export function buildConfig(secret: string): Cfg {
   return {
     jwt: { secret, userIdClaim: "sub", roleClaim: "role" },
     entities: {
+      users: {
+        fields: {
+          name: "string",
+          email: "string",
+        },
+        policies: {
+          create: { roles: ["admin"] },
+          read: "public",
+          update: { rule: "row.id == auth.userId" },
+          delete: { roles: ["admin"] },
+        },
+        relations: {
+          posts: { kind: "hasMany", target: "posts", fk: "authorId" },
+        },
+      },
       posts: {
         fields: {
           title: "string",
@@ -20,6 +35,9 @@ export function buildConfig(secret: string): Cfg {
           update: { rule: "row.authorId == auth.userId" },
           delete: { roles: ["admin"] },
         },
+        relations: {
+          author: { kind: "belongsTo", target: "users", fk: "authorId" },
+        },
       },
     },
     routes: [health, echo],
@@ -30,6 +48,15 @@ export function buildConfig(secret: string): Cfg {
 const sampleConfig = {
   jwt: { secret: "" } as const,
   entities: {
+    users: {
+      fields: { name: "string", email: "string" },
+      policies: {
+        create: { roles: ["admin"] },
+        read: "public",
+        update: { rule: "row.id == auth.userId" },
+        delete: { roles: ["admin"] },
+      },
+    },
     posts: {
       fields: {
         title: "string",
@@ -48,4 +75,4 @@ const sampleConfig = {
 
 export type AppConfig = typeof sampleConfig;
 export type DB = DbOf<AppConfig>;
-//   ^? { posts: { id: string; title: string; body: string; authorId: string } }
+//   ^? { users: {...}; posts: {...} }

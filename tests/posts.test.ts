@@ -1,43 +1,14 @@
 // End-to-end integration test: in-memory SQLite + real engine + signed JWTs.
-// Tests the validating slice: role-gated create/delete, public read, row-rule update.
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { SignJWT } from "jose";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { buildApp } from "../src/engine/build.ts";
-import { nodeSqlitePlatform } from "../src/adapters/node-sqlite.ts";
-import { buildConfig, type DB } from "../src/config.ts";
-
-const SECRET = "test-secret-32-bytes-minimum-padding-xx";
-const KEY = new TextEncoder().encode(SECRET);
-
-async function token(payload: Record<string, unknown>): Promise<string> {
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(KEY);
-}
-
-function bearer(t: string): HeadersInit {
-  return { Authorization: `Bearer ${t}`, "Content-Type": "application/json" };
-}
-
-function setup() {
-  const { platform, raw } = nodeSqlitePlatform<DB>();
-  const sql = readFileSync(join(__dirname, "../migrations/0001_init.sql"), "utf8");
-  raw.exec(sql);
-  const cfg = buildConfig(SECRET);
-  const app = buildApp(cfg, platform);
-  return { app, raw };
-}
+import { setup, token, bearer, SECRET } from "./helpers.ts";
 
 describe("posts entity", () => {
-  let app: ReturnType<typeof setup>["app"];
+  let app: ReturnType<typeof setup>;
 
   beforeEach(() => {
-    app = setup().app;
+    app = setup();
   });
 
   describe("policies — deny by default", () => {
@@ -198,6 +169,7 @@ describe("posts entity", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as { entities: string[] };
       expect(body.entities).toContain("posts");
+      expect(body.entities).toContain("users");
     });
   });
 });

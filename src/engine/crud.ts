@@ -14,7 +14,7 @@ export function mountCrud<DB>(app: App, cfg: Cfg, db: Kysely<DB>): void {
   // when they query the same instance directly.
   const dyn = db as unknown as DynDb;
   for (const [name, entity] of Object.entries(cfg.entities)) {
-    mountEntity(app, name, entity, dyn);
+    mountEntity(app, name, entity, dyn, cfg);
   }
 }
 
@@ -23,9 +23,68 @@ function mountEntity(
   name: string,
   entity: EntityDef,
   db: DynDb,
+  cfg: Cfg,
 ): void {
   const base = `/api/${name}`;
   const hookCtx = (auth: HookCtx["auth"]): HookCtx => ({ auth, platform: { db } });
+
+  // ── Relation helpers ─────────────────────────────────────────────────────
+  const relations = entity.relations ?? {};
+
+  async function validateBelongsTo(row: Record<string, unknown>): Promise<string | null> {
+    for (const [, rel] of Object.entries(relations)) {
+      if (rel.kind !== "belongsTo") continue;
+      const fkValue = row[rel.fk];
+      if (fkValue === undefined || fkValue === null) continue;
+      const target = await db
+        .selectFrom(rel.target)
+        .select("id" as never)
+        .where("id" as never, "=", fkValue as never)
+        .executeTakeFirst();
+      if (!target) return `${rel.target} with id '${String(fkValue)}' not found`;
+    }
+    return null;
+  }
+
+  async function expandIncludes(
+    row: Record<string, unknown>,
+    includes: string[],
+  ): Promise<Record<string, unknown>> {
+    if (includes.length === 0) return row;
+    const result: Record<string, unknown> = { ...row };
+    for (const includeName of includes) {
+      const rel = relations[includeName];
+      if (!rel) continue;
+      if (rel.kind === "belongsTo") {
+        const fkValue = row[rel.fk];
+        if (fkValue === undefined || fkValue === null) {
+          result[includeName] = null;
+          continue;
+        }
+        const linked = await db
+          .selectFrom(rel.target)
+          .selectAll()
+          .where("id" as never, "=", fkValue as never)
+          .executeTakeFirst();
+        result[includeName] = linked ?? null;
+      } else if (rel.kind === "hasMany") {
+        const linked = await db
+          .selectFrom(rel.target)
+          .selectAll()
+          .where(rel.fk as never, "=", row.id as never)
+          .execute();
+        result[includeName] = linked;
+      }
+    }
+    return result;
+  }
+
+  function parseIncludes(c: { req: { url: string } }): string[] {
+    const url = new URL(c.req.url);
+    const include = url.searchParams.get("include");
+    if (!include) return [];
+    return include.split(",").map((s) => s.trim()).filter(Boolean);
+  }
 
   // LIST
   app.get(base, async (c) => {
@@ -38,7 +97,9 @@ function mountEntity(
     // future work: compile common rule shapes to SQL where-clauses.
     const filtered =
       decision.effect === "rule" ? rows.filter((r) => decision.predicate(r)) : rows;
-    return c.json(filtered);
+    const includes = parseIncludes(c);
+    const expanded = await Promise.all(filtered.map((r) => expandIncludes(r, includes)));
+    return c.json(expanded);
   });
 
   // GET
@@ -54,7 +115,8 @@ function mountEntity(
       .executeTakeFirst();
     if (!row) return c.json({ error: "not found" }, 404);
     if (!rowAllowed(decision, row)) return c.json({ error: "forbidden" }, 403);
-    return c.json(row);
+    const expanded = await expandIncludes(row, parseIncludes(c));
+    return c.json(expanded);
   });
 
   // CREATE
@@ -72,6 +134,8 @@ function mountEntity(
     if (entity.hooks?.beforeCreate) {
       row = await entity.hooks.beforeCreate(row, hookCtx(auth));
     }
+    const fkErr = await validateBelongsTo(row);
+    if (fkErr) return c.json({ error: fkErr }, 400);
     await db.insertInto(name).values(row as never).execute();
     if (entity.hooks?.afterCreate) {
       await entity.hooks.afterCreate(row, hookCtx(auth));
@@ -106,6 +170,8 @@ function mountEntity(
     if (Object.keys(filteredPatch).length === 0) {
       return c.json(existing);
     }
+    const fkErr = await validateBelongsTo(filteredPatch);
+    if (fkErr) return c.json({ error: fkErr }, 400);
     await db
       .updateTable(name)
       .set(filteredPatch as never)

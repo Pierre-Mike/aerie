@@ -26,8 +26,19 @@ export type EntityDef = {
     update: Policy;
     delete: Policy;
   };
+  relations?: Record<string, RelationDef>;
   hooks?: Hooks;
 };
+
+/**
+ * - belongsTo: this entity stores `<fk>` referencing `<target>.id`. FK column
+ *   must exist as a string field in this entity's `fields`.
+ * - hasMany: virtual — no column on this entity. The target entity stores the
+ *   FK back to this one. Read with `?include=<relName>`.
+ */
+export type RelationDef =
+  | { kind: "belongsTo"; target: string; fk: string }
+  | { kind: "hasMany"; target: string; fk: string };
 
 export type HookCtx = {
   auth: Auth | null;

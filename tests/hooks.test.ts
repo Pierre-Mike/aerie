@@ -2,26 +2,19 @@
 // beforeUpdate / afterUpdate, beforeDelete / afterDelete.
 
 import { describe, it, expect } from "vitest";
-import { SignJWT } from "jose";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { buildApp } from "../src/engine/build.ts";
-import { nodeSqlitePlatform } from "../src/adapters/node-sqlite.ts";
+import { setupWith, token } from "./helpers.ts";
 import type { Cfg } from "../src/engine/types.ts";
+import { SECRET } from "./helpers.ts";
 
-const SECRET = "test-secret-32-bytes-minimum-padding-xx";
-const KEY = new TextEncoder().encode(SECRET);
-
-async function token(p: Record<string, unknown>): Promise<string> {
-  return new SignJWT(p).setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h").sign(KEY);
-}
-
-function setup(cfg: Cfg) {
-  const { platform, raw } = nodeSqlitePlatform();
-  const sql = readFileSync(join(__dirname, "../migrations/0001_init.sql"), "utf8");
-  raw.exec(sql);
-  return buildApp(cfg, platform);
-}
+const baseUsers: Cfg["entities"][string] = {
+  fields: { name: "string", email: "string" },
+  policies: {
+    create: { roles: ["admin"] },
+    read: "public",
+    update: "public",
+    delete: { roles: ["admin"] },
+  },
+};
 
 describe("entity hooks", () => {
   it("beforeCreate can mutate the row (auto-fill authorId from auth)", async () => {
@@ -29,6 +22,7 @@ describe("entity hooks", () => {
     const cfg: Cfg = {
       jwt: { secret: SECRET },
       entities: {
+        users: baseUsers,
         posts: {
           fields: {
             title: "string",
@@ -41,18 +35,19 @@ describe("entity hooks", () => {
             update: { rule: "row.authorId == auth.userId" },
             delete: { roles: ["admin"] },
           },
+          relations: { author: { kind: "belongsTo", target: "users", fk: "authorId" } },
           hooks: {
-            beforeCreate: (row, ctx) => ({ ...row, authorId: ctx.auth?.userId ?? "anon" }),
+            beforeCreate: (row, ctx) => ({ ...row, authorId: ctx.auth?.userId ?? "alice" }),
             afterCreate: (row) => { events.push(`created:${row.id}`); },
           },
         },
       },
     };
-    const app = setup(cfg);
+    const app = setupWith(cfg);
     const t = await token({ sub: "alice", role: "user" });
     const res = await app.request("/api/posts", {
       method: "POST",
-      body: JSON.stringify({ title: "T", body: "B" }), // note: no authorId sent
+      body: JSON.stringify({ title: "T", body: "B" }),
       headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
     });
     expect(res.status).toBe(201);
@@ -65,6 +60,7 @@ describe("entity hooks", () => {
     const cfg: Cfg = {
       jwt: { secret: SECRET },
       entities: {
+        users: baseUsers,
         posts: {
           fields: {
             title: "string",
@@ -77,9 +73,9 @@ describe("entity hooks", () => {
             update: { rule: "row.authorId == auth.userId" },
             delete: { roles: ["admin"] },
           },
+          relations: { author: { kind: "belongsTo", target: "users", fk: "authorId" } },
           hooks: {
-            // Force title to uppercase on every update.
-            beforeUpdate: (patch, _prev) => ({
+            beforeUpdate: (patch) => ({
               ...patch,
               ...(typeof patch.title === "string" ? { title: patch.title.toUpperCase() } : {}),
             }),
@@ -87,7 +83,7 @@ describe("entity hooks", () => {
         },
       },
     };
-    const app = setup(cfg);
+    const app = setupWith(cfg);
     const t = await token({ sub: "alice", role: "user" });
     const headers = { Authorization: `Bearer ${t}`, "Content-Type": "application/json" };
 
@@ -113,6 +109,7 @@ describe("entity hooks", () => {
     const cfg: Cfg = {
       jwt: { secret: SECRET },
       entities: {
+        users: baseUsers,
         posts: {
           fields: { title: "string", body: "string", authorId: "string" },
           policies: {
@@ -121,6 +118,7 @@ describe("entity hooks", () => {
             update: { rule: "row.authorId == auth.userId" },
             delete: { roles: ["admin"] },
           },
+          relations: { author: { kind: "belongsTo", target: "users", fk: "authorId" } },
           hooks: {
             beforeDelete: (row) => { events.push(`before:${(row as { title: string }).title}`); },
             afterDelete:  (row) => { events.push(`after:${(row as { title: string }).title}`); },
@@ -128,7 +126,7 @@ describe("entity hooks", () => {
         },
       },
     };
-    const app = setup(cfg);
+    const app = setupWith(cfg);
     const userTok = await token({ sub: "u1", role: "user" });
     const adminTok = await token({ sub: "a1", role: "admin" });
 

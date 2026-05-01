@@ -1,12 +1,8 @@
 // Expression evaluator + complex policy rules.
 
 import { describe, it, expect } from "vitest";
-import { SignJWT } from "jose";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { compile } from "../src/engine/expr.ts";
-import { buildApp } from "../src/engine/build.ts";
-import { nodeSqlitePlatform } from "../src/adapters/node-sqlite.ts";
+import { setupWith, token, SECRET } from "./helpers.ts";
 import type { Cfg } from "../src/engine/types.ts";
 
 describe("expr.compile", () => {
@@ -23,50 +19,47 @@ describe("expr.compile", () => {
   });
 
   it("rejects disallowed operators", () => {
-    expect(() => compile("row.n + 1")).not.toThrow(); // parse OK
+    expect(() => compile("row.n + 1")).not.toThrow();
     expect(() => compile("row.n + 1")({ row: { n: 1 }, auth: {} })).toThrow(/disallowed/);
   });
 
   it("missing scope key yields undefined, not crash", () => {
-    expect(compile("row.x == auth.userId")({ row: {}, auth: {} })).toBe(true); // undefined === undefined
+    expect(compile("row.x == auth.userId")({ row: {}, auth: {} })).toBe(true);
     expect(compile("auth.foo.bar == 1")({ row: {}, auth: {} })).toBe(false);
   });
 });
 
 describe("policy with arbitrary rule", () => {
-  const SECRET = "test-secret-32-bytes-minimum-padding-xx";
-  const KEY = new TextEncoder().encode(SECRET);
-  const tok = (p: Record<string, unknown>) =>
-    new SignJWT(p).setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h").sign(KEY);
-
-  function setup(cfg: Cfg) {
-    const { platform, raw } = nodeSqlitePlatform();
-    const sql = readFileSync(join(__dirname, "../migrations/0001_init.sql"), "utf8");
-    raw.exec(sql);
-    return buildApp(cfg, platform);
-  }
-
   const cfg: Cfg = {
     jwt: { secret: SECRET },
     entities: {
+      users: {
+        fields: { name: "string", email: "string" },
+        policies: {
+          create: { roles: ["admin"] },
+          read: "public",
+          update: "public",
+          delete: { roles: ["admin"] },
+        },
+      },
       posts: {
         fields: { title: "string", body: "string", authorId: "string" },
         policies: {
           create: { roles: ["user", "admin"] },
-          // Owner OR admin can read; LIST filters in memory.
           read: { rule: "row.authorId == auth.userId || auth.role == 'admin'" },
           update: { rule: "row.authorId == auth.userId" },
           delete: { roles: ["admin"] },
         },
+        relations: { author: { kind: "belongsTo", target: "users", fk: "authorId" } },
       },
     },
   };
 
   it("LIST filters rows post-fetch by predicate", async () => {
-    const app = setup(cfg);
-    const aliceTok = await tok({ sub: "alice", role: "user" });
-    const bobTok = await tok({ sub: "bob", role: "user" });
-    const adminTok = await tok({ sub: "admin1", role: "admin" });
+    const app = setupWith(cfg);
+    const aliceTok = await token({ sub: "alice", role: "user" });
+    const bobTok = await token({ sub: "bob", role: "user" });
+    const adminTok = await token({ sub: "admin1", role: "admin" });
 
     const headers = (t: string) => ({ Authorization: `Bearer ${t}`, "Content-Type": "application/json" });
 
@@ -87,13 +80,13 @@ describe("policy with arbitrary rule", () => {
 
     const adminList = await app.request("/api/posts", { headers: headers(adminTok) });
     const adminRows = (await adminList.json()) as unknown[];
-    expect(adminRows).toHaveLength(2); // admin sees all
+    expect(adminRows).toHaveLength(2);
   });
 
   it("GET enforces rule on individual row", async () => {
-    const app = setup(cfg);
-    const aliceTok = await tok({ sub: "alice", role: "user" });
-    const bobTok = await tok({ sub: "bob", role: "user" });
+    const app = setupWith(cfg);
+    const aliceTok = await token({ sub: "alice", role: "user" });
+    const bobTok = await token({ sub: "bob", role: "user" });
 
     const created = await app.request("/api/posts", {
       method: "POST",
