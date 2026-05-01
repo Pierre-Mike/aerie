@@ -67,16 +67,37 @@ export const cfg = { entities: { /* ... */ }, routes: [checkout] };
 
 One file, one route, fully typed. JWT verified by the same middleware. The config still lists every endpoint in the app.
 
+## Typed client
+
+```ts
+import { createClient } from "aerie/client";
+import type { DB } from "./config";
+
+const c = createClient<DB>("https://api.example.com", { token: clerkJwt });
+
+const post = await c.posts.create({ title: "hi", body: "x", authorId: "alice" });
+//    ^? typed return — { id, title, body, authorId }
+const list = await c.posts.list();
+const expanded = await c.posts.get(post.id, { include: ["author"] });
+await c.posts.update(post.id, { title: "edited" });
+```
+
+Types derive from your config. No codegen, no separate schema.
+
 ## Status
 
-Validating slice — 16/16 tests green. Working today:
+39/39 tests green. Working today:
 
-- Entities with fields, policies (`public` / `authenticated` / `{ roles }` / row rules), validation
+- Entities — fields (string/int/bool/datetime/file), policies (public / authenticated / roles / arbitrary expression rules via jsep), validation
+- Relations — `belongsTo` (FK validation on write) + `hasMany` (`?include=` expansion on read)
+- Lifecycle hooks — beforeCreate / afterCreate / beforeUpdate / afterUpdate / beforeDelete / afterDelete
 - Custom routes via `defineRoute` (one file per handler), composed in `cfg.routes`
-- JWT verify (HS256 shared secret or remote JWKS)
-- D1 adapter (Workers) + better-sqlite3 adapter (tests / Node)
+- JWT verify — HS256 shared secret or remote JWKS (Clerk / Auth0 / Better-Auth)
+- Storage — Platform.storage (R2 on CF, FS / memory on Node) + sample upload route
+- Typed client — `createClient<DB>()` derives shapes from the config
+- D1 adapter (Workers) + better-sqlite3 adapter (tests / local Node)
 
-Not production-ready. Missing: relations, hooks, computed fields, file storage, RPC client export, full expression evaluator (jsep). Add as needed.
+Not production-ready. Known gaps: computed fields (function-based read-only columns), real migration tooling beyond hand-rolled SQL, OpenAPI export, multi-tenant patterns, soft-delete sugar.
 
 ## License
 
