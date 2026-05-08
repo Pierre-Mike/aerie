@@ -4,6 +4,54 @@
   "description": "One config file → typed CRUD + auth on Cloudflare Workers (or anywhere).",
   "type": "module",
   "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./drizzle": {
+      "types": "./src/engine/drizzle.ts",
+      "default": "./src/engine/drizzle.ts"
+    },
+    "./route": {
+      "types": "./src/engine/route.ts",
+      "default": "./src/engine/route.ts"
+    },
+    "./engine": {
+      "types": "./src/engine/build.ts",
+      "default": "./src/engine/build.ts"
+    },
+    "./types": {
+      "types": "./src/engine/types.ts",
+      "default": "./src/engine/types.ts"
+    },
+    "./platform": {
+      "types": "./src/engine/platform.ts",
+      "default": "./src/engine/platform.ts"
+    },
+    "./adapters/cloudflare": {
+      "types": "./src/adapters/cloudflare.ts",
+      "default": "./src/adapters/cloudflare.ts"
+    },
+    "./adapters/node-sqlite": {
+      "types": "./src/adapters/node-sqlite.ts",
+      "default": "./src/adapters/node-sqlite.ts"
+    },
+    "./adapters/fs-storage": {
+      "types": "./src/adapters/fs-storage.ts",
+      "default": "./src/adapters/fs-storage.ts"
+    }
+  },
+  "files": [
+    "src",
+    "migrations",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
